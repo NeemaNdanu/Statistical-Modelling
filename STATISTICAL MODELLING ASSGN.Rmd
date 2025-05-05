@@ -1,0 +1,261 @@
+---
+title: "STATISTICAL MODELLING ASSGN"
+author: "NEEMA NDANU"
+date: "2024-06-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## QUESTIONS
+You are tasked with developing a predictive model to identify students at risk of academic dropout in a higher education setting. The dataset provided includes various attributes known at the time of student enrollment, such as academic path, demographics, and socio-economic factors. The goal is to classify students into three categories: "dropout," "enrolled," and "graduate" by the end of the normal duration of their course using multinomial logistic regression. (dataset can be assessed in https://www.kaggle.com/datasets/waleedejaz/predict-students-dropout-and-academic-success)
+
+### a)	Explore the dataset to understand its structure, check for missing values, and identify potential outliers.
+
+```{r}
+# Load necessary libraries
+library(smotefamily)
+library(readxl)   
+library(dplyr) 
+library(tidyr)
+library(ggplot2)
+library(nnet) 
+library(caret)
+
+# Load the dataset 
+data <- read.csv("C:\\Users\\HP\\Downloads\\Stastical_modelling datasets.csv")
+
+# Shortened variable names
+colnames(data) <- c("Marital_Status", "App_Mode", "App_Order", "Course", 
+                    "Attend_Type", "Prev_Qual", "Prev_Qual_Grade", 
+                    "Nationality", "Mother_Qual", "Father_Qual", 
+                    "Mother_Occup", "Father_Occup", 
+                    "Admin_Grade", "Displaced", "Edu_Needs", 
+                    "Debtor", "TuitionFees_UpToDate", "Gender", 
+                    "Scholarship", "Age_Enroll", "International", 
+                    "CU1_Credited", "CU1_Enroll", "CU1_Evaluate", 
+                    "CU1_Approved", "CU1_Grade", "CU1_No_Evaluate", 
+                    "CU2_Credited", "CU2_Enroll", "CU2_Evaluate", 
+                    "CU2_Approved", "CU2_Grade", "CU2_No_Evaluate", 
+                    "Unemploy_Rate", "Inflation_Rate", "GDP", "Target")
+data
+
+# Explore the structure of the data
+str(data)
+
+# Summary of the data
+summary(data)
+
+# Check for missing values
+missing_values <- sum(is.na(data))
+cat("Total missing values:", missing_values, "\n")
+
+# Remove rows with missing values
+data <- na.omit(data)
+
+# Visualize distributions and outliers using boxplot
+plot_data <- data %>%
+  gather(key = "variable", value = "value", -Target)
+
+ggplot(plot_data, aes(x = variable, y = value)) +
+  geom_boxplot() +
+  labs(x = "Variable", y = "Value") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+There are two outliers marked above the rest of the data points. These outliers have significantly higher values for those specific variables
+
+### b)	Preprocess the data, including handling categorical variables and addressing any data imbalances between the outcome categories.
+```{r}
+# Convert Target to a factor
+data$Target <- as.factor(data$Target)
+
+# Check for class imbalance
+table(data$Target)
+
+# Apply SMOTE to balance the dataset
+smote_data <- SMOTE(X = data[ , -which(names(data) == "Target")], 
+                    target = data$Target, 
+                    K = 5, 
+                    dup_size = 1)
+data_balanced <- smote_data$data
+names(data_balanced)[ncol(data_balanced)] <- "Target"
+table(data_balanced$Target)
+
+```
+### EXPLANATION
+We used the SMOTE technique so as to sort out the issue of imbalance among the outcome variables. Split the data sets to 70% training set and 30% testing set  and then is used the testing set to do prediction, accuracy and other measures metrics.
+
+### c) Formulate a multinomial logistic regression model to predict the outcome category (dropout, enrolled, graduate) based on the available predictors.
+```{r}
+# Data Partition
+set.seed(222)
+data_split <- createDataPartition(data_balanced$Target, p = 0.7, list = FALSE)
+training <- data_balanced[data_split, ]
+testing <- data_balanced[-data_split, ]
+
+# Ensure both training and testing Target variables have the same levels
+levels(training$Target) <- levels(data$Target)
+levels(testing$Target) <- levels(data$Target)
+
+# Multinomial Logistic Regression
+model <- multinom(Target ~ ., data = training)
+summary(model)
+odds_ratio <- exp(coef(model))
+odds_ratio
+
+# Identify significant predictors
+significant_vars <- summary(model)$coefficients / summary(model)$standard.errors
+p_values <- (1 - pnorm(abs(significant_vars), 0, 1)) * 2
+print(p_values)
+
+```
+
+### EXPLANATION
+When we trained the set using multinomial logistic regression (multinom in R) where the dependent variable (Target) has three categories: Dropout, Enrolled, and Graduate we are able to get the following output:
+
+Coefficients:
+- The coefficients which represents the estimated effects of each predictor variable on the log odds of being in each category Enrolled or Graduate, relative to the reference category Dropout.
+- In other words, for Enrolled, positive coefficients, indicates variables that are associated with higher odds of being in the Enrolled category compared to Dropout, while negative coefficients indicate variables associated with lower odds. 
+
+Standard Errors:
+- These indicate the precision of the coefficient estimates. Smaller standard errors suggest more precise estimates.
+
+ Residual Deviance:
+- This measure quantifies how well the model fits the data. A lower residual deviance indicates a better fit.
+
+AIC (Akaike Information Criterion):
+- AIC is a measure of model quality, balancing goodness of fit with model complexity. Lower AIC values indicate better-performing models relative to others.
+
+After the  residual deviance  and AIC we have the odds ratio and the p-values.
+
+### d)	Discuss the assumptions of multinomial logistic regression and how they apply to this classification task.
+The assumptions of the multinomial logistic regression are similar to the overall assumptions of any regression model which are: 
+- Independence of Observations: Each observation (or student in this case) should be independent of others. This assumption ensures that the observations are not correlated with each other.
+  
+- Linear Relationship: The relationship between the predictors (independent variables) and the logits (log-odds) of the outcomes should be linear. This linear relationship is assumed for each outcome category relative to the reference category.
+  
+- No Multicollinearity: Predictor variables should not be highly correlated with each other. High multicollinearity can lead to unstable estimates of the coefficients.
+
+
+### e)	Evaluate the model's performance on the testing data using appropriate metrics such as accuracy, precision, recall, and F1-s
+core
+```{r}
+# Predict on the test data
+predictions <- predict(model, testing)
+
+# Ensure predictions and actual values are factors with the same levels
+predictions <- factor(predictions, levels = levels(testing$Target))
+testing$Target <- factor(testing$Target, levels = levels(testing$Target))
+
+# Confusion matrix
+conf_matrix <- confusionMatrix(predictions, testing$Target)
+print(conf_matrix)
+
+## Extract the confusion matrix table
+cm_table <- conf_matrix$table
+
+# Manually calculate precision, recall, and F1 score for each class
+calculate_metrics <- function(cm, class) {
+  TP <- cm[class, class]
+  FP <- sum(cm[class, ]) - TP
+  FN <- sum(cm[, class]) - TP
+  TN <- sum(cm) - (TP + FP + FN)
+  
+  precision <- TP / (TP + FP)
+  recall <- TP / (TP + FN)
+  f1_score <- 2 * (precision * recall) / (precision + recall)
+  
+  list(Precision = precision, Recall = recall, F1_Score = f1_score)
+}
+
+# Calculate metrics for each class
+classes <- colnames(cm_table)
+metrics <- lapply(classes, function(class) calculate_metrics(cm_table, class))
+
+# Print metrics
+for (i in 1:length(classes)) {
+  cat(paste("Class:", classes[i]), "\n")
+  cat(paste("  Precision:", round(metrics[[i]]$Precision, 4)), "\n")
+  cat(paste("  Recall:", round(metrics[[i]]$Recall, 4)), "\n")
+  cat(paste("  F1 Score:", round(metrics[[i]]$F1_Score, 4)), "\n")
+}
+
+
+```
+
+### EXPLANATION 
+For each class (Dropout, Enrolled, Graduate), the following metrics are provided:
+- Sensitivity/Recall: The proportion of actual positives  that were correctly predicted.
+- Specificity: The proportion of actual negatives that were correctly predicted.
+- Pos Pred Value/Precision: The proportion of positive predictions that are correct.
+- Neg Pred Value: The proportion of negative predictions that are correct.
+- Prevalence: The prevalence of each class in the actual data.
+
+Precision, Recall, F1 Score: These metrics are reported for each class (Dropout, Enrolled, Graduate). They provide insight into how well the model performs for each class in terms of predicting correctly (Precision), capturing actual positives (Recall), and balancing both (F1 Score).
+
+For example:
+- For the Enrolled class:
+  - Precision:0.6468which is approximately 64.68% of instances predicted as Enrolled are actually Enrolled.
+  - Recall: 0.6155 means the model correctly identifies 61.55% of actual Enrolled.
+  - F1 Score: 0.6308 which is approximately 63.08% provides a balanced measure of precision and recall.
+
+
+### f)	Interpret the confusion matrix to assess the model's ability to differentiate between the three outcome categories.
+The following is how we can interpret the confusion matrix :
+- Rows/Predicted Classes:Each row represents the predicted outcome category (Dropout, Enrolled, Graduate).
+  
+- Columns/Actual Classes: Each column represents the actual outcome category.
+
+- Interpretation by each column:
+  - Dropout: The model correctly predicted 310 instances as Dropout but it misclassified 78 as Enrolled and 38 as Graduate.
+  
+  - Enrolled: The model correctly predicted 293 instances as Enrolled but misclassified 60 as Dropout and 123 as Graduate.
+  
+  - Graduate: The model correctly predicted 569 instances as Graduate. It misclassified 11 as Dropout and 82 as Enrolled.
+
+The overall accuracy of the model is 74.94%, which indicates the proportion of correctly classified instances out of total instances.
+
+### g)	Interpret the coefficients from the multinomial logistic regression model. How do these coefficients inform us about the relationships between predictor variables and the likelihood of students belonging to each outcome category?
+
+1. We can interpret the intercept as follows:
+    - The intercept for each category either "Enrolled" or "Graduate" represents the log-odds of that category relative eg CU2_Grade,Age etc to the reference category ("Dropout"), when all predictor variables are zero.
+    - For example, the intercept for "Enrolled" is 2.2874, and for "Graduate" it is -1.0868. These values indicate the baseline log-odds of being "Enrolled" or "Graduate" compared to "Dropout."
+
+2. We can also interpret the coefficients as follows:
+   - Each coefficient for a predictor variable represents the change in the log-odds of being in the respective category ("Enrolled" or "Graduate") for a one-unit increase in that predictor variable, holding all other variables constant.
+   - For instance, a coefficient of 0.1590 for "Marital_Status" in the "Enrolled" category suggests that for every one-unit increase in "Marital_Status," the log-odds of being "Enrolled" increase by 0.1590, assuming all other variables remain constant.
+   - A one-unit increase in App_Mode increases the log-odds of being Enrolled by 0.0035 and Graduate by a decrease of 0.0006, relative to being a Dropout.
+   - For TuitionFees_UpToDate the coefficient Enrolled (2.054), Graduate (3.232) it means that a one-unit increase in TuitionFees_UpToDate increases the log-odds of being Enrolled by 2.054 and Graduate by 3.232, relative to being a Dropout.
+   - For Inflation_Rate Enrolled (0.0016), Graduate (0.026) means that a one-unit increase in Inflation_Rate increases the log-odds of being Enrolled by 0.0016 and Graduate by 0.026, relative to being a Dropout.
+
+3. we can then interpret the odds ratio which comes after the  residual deviance  and AIC:
+   - The odds ratios indicates how the odds of being in a particular outcome category change with a one-unit increase in the predictor variable, holding other variables constant.
+   - An odds ratio of 1 indicates no change in the odds, while an odds ratio greater than 1 indicates an increase in the odds, and less than 1 indicates a decrease.
+   - For example predictor variable such as Martial_Status, Prev_Qual etc their odds ratio are greater than 1 in both of the outcome variables means that the odds of being in a either of the outcome category changes with a one-unit increase in these predictor variable, holding other variables constant.
+   - For example predictor variable such as App_Mode and Attend_type etc their odds ratio for each outcome variable differs for example for App_Mode grater than 1 for Enrolled and less than one in Graduate , while for Attend_type the Enrolled is less than one and for Graduate it is more than 1 meaning in either situation the odds ratio of being in a either of the outcome category changes with a one-unit increase or decrease in these predictor variable, holding other variables constant
+   - For example predictor variable such as Cus2_credit , Displaced etc  their odds ratio are less than 1 in both of the outcome variables means that the odds of being in a either of the outcome category changes with a one-unit decreases in these predictor variable, holding other variables constant.
+   
+4. We can then interpret the p-values which comes after the  residual deviance  and AIC
+  - The summary(model) part of the output shows p-values associated with each coefficient. Lower p-values (typically < 0.05) suggest that the corresponding predictor variable is significantly associated with the outcome category. The p-values are not explicitly shown but are typically accessed through summary(model)$coefficients.
+  - From the above output we can say that some independent variables are less than 0.05 like Martial status, tuitionFee_UpToDate etc so they are significantly associated with the outcome category while those more than 0.05 like inflation_rate,GDP etc they are not significantly associated with the outcome category 
+
+### h)	Discuss any significant findings or insights gained from the model that could help in understanding the factors influencing student outcomes
+Some significant predictor variable include such as :
+  - The predictor, TuitionFee_UpToDate shows a strong positive association with both Enrolled and Graduate categories, indicating that students with up-to-date tuition fee payments are more likely to be Enrolled or Graduate compared to being a Dropout, indicating financial stability or commitment to their education.
+  - The predictor , Scholarship shows a strong positive association with both Enrolled and Graduate categories, indicating that students sponsored or those who acquire scholarship are more likely to be Enrolled or Graduate compared to being a Dropout.This highlights the positive impact of financial aid on student retention and success.
+  - The predictor , Martial_Status shows shows a strong positive association with both the Enrolled and Graduate categories compared to Dropout. This suggests that marital status significantly influences a student's likelihood of being enrolled or successfully graduating compared to dropping out.For example married students may exhibit more stability or support systems that contribute to higher enrollment and graduation rates compared to single or unmarried students.
+  
+From the above explanation we can come up with some findings or insights which include :
+  -Education supports like scholarships and financial stability (TuitionFee_UpToDate) positively impact student outcomes by facilitating continuous enrollment and graduation.
+  -  Social factors such as marital status serves as a proxy for social support and stability, influencing persistence and success in educational pursuits.
+
+Institutions and policymakers can leverage these insights to design targeted interventions, such as increased financial aid or support services tailored to students with varying marital statuses, to enhance overall student retention and success rates.
+  
+
+  
+
+

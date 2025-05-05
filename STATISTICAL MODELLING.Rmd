@@ -1,0 +1,191 @@
+---
+title: "STATISTICAL MODELLING"
+author: "NEEMA NDANU"
+date: "2024-05-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Given the following inforamation:-> 106 emplaoed in a job related to field of study. 74 employed in a job unrelated to their field of study. 20 unemployed.Use R to estimate the effects. Test equal probabilities.
+
+```{r}
+# Given data
+Employed_Related <- 106
+Employed_Unrelated <- 74
+Unemployed <- 20
+
+# Total number of individuals
+Total <- Employed_Related + Employed_Unrelated + Unemployed
+
+# Create a data frame from the contingency table
+contingency_df <- data.frame(
+  Employment_Status = rep(c("Employed", "Unemployed"), each = 2),
+  Field_Relation = rep(c("Related", "Unrelated"), times = 2),
+  Count = c(Employed_Related, Employed_Unrelated, Unemployed, NA)
+)
+
+contingency_table
+```
+```{r}
+# Load necessary packages
+library(MASS)
+
+# Fit the loglinear model
+fit <- glm(Count ~ Employment_Status * Field_Relation, data = contingency_df, family = poisson())
+
+# Display the summary of the model
+summary(fit)
+
+# Test for equal probabilities
+equal_prob_test <- anova(fit, test = "Chisq")
+equal_prob_test
+
+```
+
+### EXPLANATION
+
+```{r}
+glm(formula = Count ~ Employment_Status * Field_Relation, family = poisson(), data = contingency_df)
+```
+This indicates that a Generalized Linear Model (GLM) with a Poisson distribution was fitted using the formula `Count ~ Employment_Status * Field_Relation`, which includes an interaction term between `Employment_Status` and `Field_Relation`.
+
+#### Coefficients
+The coefficients table shows the estimated effects of each term in the model:
+
+- **(Intercept)**: The baseline log count for employed individuals in a job related to their field. The estimate is 4.66344.
+- **Employment_StatusUnemployed**: The change in the log count when the employment status is "Unemployed" compared to "Employed". The estimate is -1.66771, indicating a decrease.
+- **Field_RelationUnrelated**: The change in the log count when the job is unrelated to the field of study compared to related. The estimate is -0.35937, indicating a decrease.
+- **Employment_StatusUnemployed:Field_RelationUnrelated**: Not defined due to singularities, meaning this interaction term could not be estimated because there are not enough data to separate this effect from the others.
+
+#### Statistical Significance
+- **(Intercept)**: Highly significant (p < 2e-16).
+- **Employment_StatusUnemployed**: Highly significant (p < 7.88e-12).
+- **Field_RelationUnrelated**: Statistically significant (p = 0.0177).
+- **Employment_StatusUnemployed:Field_RelationUnrelated**: NA, not estimable.
+
+#### Deviance and Degrees of Freedom
+- **Null deviance**: 65.598 on 2 degrees of freedom (df). This measures the fit of a model with only the intercept.
+- **Residual deviance**: 0 on 0 degrees of freedom. This indicates that the model fits the data perfectly (likely due to having just enough data points to fit the model).
+
+#### AIC (Akaike Information Criterion)
+- **AIC**: 23.489. This is a measure of the relative quality of the model. Lower values indicate a better fit.
+
+#### Analysis of Deviance Table
+This table shows how much each term contributes to reducing the deviance:
+
+- **NULL**: The initial deviance with no predictors.
+- **Employment_Status**: Adding this term reduces the deviance by 59.879, with a highly significant p-value (1.009e-14).
+- **Field_Relation**: Adding this term reduces the deviance by 5.719, with a significant p-value (0.01678).
+- **Employment_Status:Field_Relation**: This term does not reduce the deviance further, indicating it doesn't provide additional explanatory power.
+
+### Simple Explanation
+
+- **Intercept (4.66344)**: On the log scale, the count of people employed in a job related to their field.
+- **Employment_StatusUnemployed (-1.66771)**: Being unemployed significantly decreases the log count compared to being employed.
+- **Field_RelationUnrelated (-0.35937)**: Having a job unrelated to the field of study significantly decreases the log count compared to having a related job.
+- The interaction between employment status and field relation couldn't be estimated due to insufficient data.
+
+### Conclusions
+
+- There is a significant difference in employment status between employed and unemployed individuals.
+- There is a significant difference in the type of job (related vs. unrelated) concerning the field of study.
+- The model fits the data perfectly, suggesting it captures the relationships within this specific dataset well.
+
+### If you want to use the estimated model to calculate the probabilities and then test these probabilities, you can follow these steps:
+
+1. **Calculate the estimated counts** using the fitted model.
+2. **Compute the probabilities** using the formula \( p_j = \frac{e^{\mu_j}}{\sum e^{\mu_i}} \), where \( \mu_j \) are the linear predictors from the model.
+3. **Test the probabilities** using a chi-square test.
+
+Here’s how you can do this in R:
+```{r}
+# Given data
+Employed_Related <- 106
+Employed_Unrelated <- 74
+Unemployed <- 20
+
+# Create a data frame with the observed counts
+contingency_df <- data.frame(
+  Employment_Status = c("Employed", "Employed", "Unemployed"),
+  Field_Relation = c("Related", "Unrelated", "Unrelated"),  # Assign a dummy value
+  Count = c(Employed_Related, Employed_Unrelated, Unemployed)
+)
+
+# Fit the loglinear model without interaction term due to singularities
+fit <- glm(Count ~ Employment_Status + Field_Relation, data = contingency_df, family = poisson())
+
+# Create a new data frame for prediction, considering only valid combinations
+predict_df <- data.frame(
+  Employment_Status = c("Employed", "Employed", "Unemployed"),
+  Field_Relation = c("Related", "Unrelated", "Unrelated")  # Use the same dummy value
+)
+
+# Predict the expected counts
+predicted_counts <- predict(fit, newdata = predict_df, type = "response")
+
+# Sum of the predicted counts
+sum_predicted_counts <- sum(predicted_counts)
+
+# Calculate the probabilities pj
+probabilities <- predicted_counts / sum_predicted_counts
+print(probabilities)
+
+# Observed counts vector (the actual observed counts)
+observed_counts <- c(Employed_Related, Employed_Unrelated, Unemployed)
+
+# Perform chi-square test with the probabilities matching observed counts structure
+chisq_test <- chisq.test(x = observed_counts, p = probabilities)
+print(chisq_test)
+
+```
+
+### Explanation of the Code:
+-> Data Frame Creation: We create a data frame with observed counts, assigning a dummy value to Field_Relation for the "Unemployed" category to avoid issues with NA.
+-> Model Fitting: Fit a Poisson log-linear model to the data, excluding interaction terms to avoid singularities.
+-> Prediction Data Frame: Create a data frame for prediction, including valid combinations only.
+-> Predicting Counts: Predict counts for each combination using the fitted model.
+-> Calculating Probabilities: Compute probabilities based on the predicted counts.
+-> Chi-Square Test: Perform a chi-square test to compare observed counts to the expected counts derived from predicted probabilities.
+
+
+### Explanation of the Output
+
+#### Calculated Probabilities:
+These probabilities correspond to the estimated proportions of each category:
+
+1. **0.53**: Probability for "Employed in a job related to their field of study" (Employed_Related).
+2. **0.37**: Probability for "Employed in a job unrelated to their field of study" (Employed_Unrelated).
+3. **0.10**: Probability for "Unemployed" (Unemployed).
+
+#### Chi-Squared Test for Given Probabilities:
+
+- **X-squared = 2.6693e-29**: The chi-squared statistic, which measures the difference between observed and expected counts. A value this close to zero indicates that the observed counts are almost identical to the expected counts derived from the model.
+  
+- **df = 2**: Degrees of freedom for the test. In this case, it's the number of categories minus one (3 - 1 = 2).
+  
+- **p-value = 1**: The p-value associated with the chi-squared statistic. A p-value of 1 indicates that the observed data perfectly fits the expected probabilities, meaning there is no significant difference between the observed counts and the expected counts.
+
+### Interpretation:
+
+1. **Good Model Fit**:
+   - The extremely small chi-squared statistic (close to zero) and the p-value of 1 suggest that the model's predicted probabilities match the observed data very well. This implies that the Poisson log-linear model accurately represents the distribution of the observed counts.
+
+2. **No Significant Difference**:
+   - The p-value of 1 indicates that there is no statistically significant difference between the observed counts and the expected counts under the null hypothesis of equal probabilities. This means that the variation in the observed data is completely explained by the model.
+
+3. **Probabilities**:
+   - The calculated probabilities indicate the likelihood of each employment status:
+     - 53% chance of being employed in a job related to the field of study.
+     - 37% chance of being employed in a job unrelated to the field of study.
+     - 10% chance of being unemployed.
+
+### Conclusion:
+
+The output suggests that the log-linear model fits the data perfectly. The calculated probabilities provide a clear understanding of the distribution of employment statuses among the individuals, and the chi-squared test confirms that there is no significant deviation from these expected probabilities in the observed data. This indicates that the model is a very good representation of the underlying data structure.
+
+
+
+

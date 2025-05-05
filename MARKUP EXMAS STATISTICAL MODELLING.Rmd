@@ -1,0 +1,269 @@
+---
+title: "MARK UP EXAMS STATISTICAL MODELLING"
+author: "NEEMA NDANU"
+date: "2024-07-26"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## QUESTION 1
+### 1.	Provide a practical example(use data) where ordinal logistic regression would be preferred over binary logistic regression. Justify your choice based on the nature of the data and the research question.(10marks)
+```{r}
+# Load the necessary libraries
+library(readxl)
+library(MASS)
+
+# Load the data 
+data <- read.csv("C:\\Users\\HP\\Desktop\\R- CODES\\wine data.csv")
+
+# summary and structure of the data
+str(data)
+summary(data)
+
+# Remove missing values
+data <- na.omit(data)
+
+# Display a portion of the data 
+head(data)
+
+# Convert quality to factor variable
+data$quality <- as.factor(data$quality)
+
+```
+
+```{r}
+# Fit an ordinal logistic regression model
+model <- polr(data$quality ~ alcohol+ pH, data = data,Hess = TRUE)
+model
+
+
+```
+
+### EXPLANATION
+
+Ordinal logistic regression is preferred for this wine quality data set because the quality ratings are ordered categories. Binary logistic regression is suitable for binary outcomes, such as determining if the wine is red or white. Here, our goal is to assess the quality of wine based on independent variables, making ordinal logistic regression the appropriate choice.
+
+The output of the code using the ordinal logistic regression give the following:
+
+   1. The estimated coefficient is for alcohol approximately 0.8334452. This positive value suggests that as the alcohol content increases, the likelihood of the wine being rated in a higher quality category also increases.
+   
+   2. The estimated coefficient is for ph approximately -0.3599026. This negative value indicates that as the pH level increases, the likelihood of the wine being rated in a higher quality category decreases.
+   
+   3. These intercept values indicate the thresholds at which the probability of the response variable shifts from one category to the next. For example, 3|4 is approximately 1.832830.
+   
+   4. The residual deviance is approximately 15000.93. This value measures how well the model fits the data.
+   
+   5. The AIC is approximately 15016.93. The AIC measures the quality of the model, considering both goodness of fit and model complexity. Lower AIC values indicate better models.
+   
+## QUESTION 2
+### Using data .Compare multinational logistic regression , transform the data to  binary logistic regression and ordinal logistic regression, highlighting the types of outcome variables each model is suited for and the key differences in their formulation. (10marks)
+
+### MULTINORMAL LOGISTIC REGRESSION
+
+Multinomial logistic regression is used to model nominal outcome variables, in which the log odds of the outcomes are modeled as a linear combination of the predictor variables.
+
+The model estimates the log-odds of each category relative to the baseline category as a function of predictor variables.
+
+The model has no specific assumptions about the relationship between categories.
+
+An example of a data set that may be used here is the iris data set since the outcome variable is more than two and it is nominal. The outcome variables being species of iris flowers: Setosa, Versicolor, Virginica.
+
+The main purpose of this data is predicting the species of an iris flower based on its features.
+
+
+```{r}
+# Load the necessary libraries
+library(readxl)
+library(MASS)
+library(nnet)
+
+# Load the data 
+data <- read.csv("C:\\Users\\HP\\Desktop\\R- CODES\\Iris.csv")
+
+# summary and structure of the data
+str(data)
+summary(data)
+
+# Remove missing values
+data <- na.omit(data)
+
+# Display a portion of the data 
+head(data)
+
+# Convert quality to factor variable
+data$Species <- as.factor(data$Species)
+
+```
+
+```{r}
+# Fit the multinomial logistic regression model
+multinom_model <- multinom(Species ~ SepalWidthCm + PetalWidthCm, data = data)
+
+# Summary of the model
+summary(multinom_model)
+```
+
+### EXPLANATION
+
+The coefficients are values for each category of the Species variable, specifically for Iris-versicolor and Iris-virginica, with Iris-setosa as the reference category.
+
+In general, the coefficients indicate the log-odds of being in the Iris-versicolor or Iris-virginica category relative to the reference category (Iris-setosa) for a one-unit increase in the predictor variables (SepalWidthCm and PetalWidthCm).
+
+The standard errors for the coefficients provide an estimate of the variability of the coefficient estimates. Larger standard errors indicate more variability and less precise estimates.
+
+Lower values of these metrics such as AIC and Deviance generally suggest that the model explains the data better.The model shows a lower residual deviance and AIC, which indicates a better fit of the model to the data.
+
+
+### Binary Logistic Regression
+
+Binary logistic regression is used to model binary outcome variables that is ,two possible outcomes.
+
+Models the log-odds of one category usually coded as 1 relative to the other category coded as 0 and estimates the probability of the outcome being in one of the two categories as a function of predictor variables.
+
+The models has no special assumptions beyond logistic regression.
+
+To transform the iris data set to fit this model, we will choose one species as the reference category and combine the other two species into a single category.
+
+```{r}
+# Convert Species to a binary outcome (Virginica vs. others)
+data$SpeciesBinary <- ifelse(data$Species == "Iris-virginica", "Virginica", "Others")
+
+# Convert to factor
+data$SpeciesBinary <- as.factor(data$SpeciesBinary)
+
+# Fit the binary logistic regression model
+binary_log_model <- glm(SpeciesBinary ~ SepalWidthCm + PetalWidthCm, family = binomial(), data = data)
+
+# Summary of the model
+summary(binary_log_model)
+
+
+```
+
+### EXPLANATION
+
+The binary logistic regression model is fitted with SpeciesBinary where we have only two outcome variables that is , Virginica vs. Others as the response variable where other is SepalWidthCm and PetalWidthCm as predictor variables.
+
+The coefficients indicate the change in the log-odds of the response variable being "Virginica" versus "Others" for a one-unit increase in each predictor variable. For example the negative coefficient for SepalWidthCm suggests that an increase in SepalWidthCm decreases the log-odds of the species being "Virginica" versus "Others."
+
+The standard errors provide an estimate of the variability of the coefficient estimates. Smaller standard errors indicate more precise estimates.For example the standard error for SepalWidthCm is 1.746 this mean that if we repeatedly sampled data from the population and recalculated the coefficient, the values would typically vary by about 1.746 units around the estimated coefficient.
+
+The p-value for all the predictor variables are lower than the common alpha values that is 0.05 hence the predictor values are highly significant, hence there is an association between the dependent and independent variables.
+
+The null deviance represents the model with only an intercept, and the residual deviance represents the model with the predictors included. Lower values of residual deviance and AIC indicate a better fit of the model to the data. 
+
+The number of Fisher Scoring iterations (9) shows the convergence of the model fitting process.
+
+
+### Ordinal Logistic Regression
+
+Ordinal logistic regression is used to model ordinal outcome variables, where the categories have a natural order. 
+
+Models the log-odds of being at or above each category threshold and estimates the log-odds of being in a higher or equal category as a function of predictor variables.
+
+The model assumes that the relationship between each pair of outcome categories is the same.
+
+The iris data set doesn't naturally fit this model since the species categories are nominal, but we can order them so as to do the OLR.
+
+```{r}
+# Rank species (Virginica < Setosa < Versicolor)
+data$SpeciesOrdinal <- factor(data$Species, ordered = TRUE, levels = c("Iris-virginica", "Iris-setosa", "Iris-versicolor"))
+
+# Fit the ordinal logistic regression model
+ordinal_logit_model <- polr(SpeciesOrdinal ~ SepalWidthCm + PetalWidthCm, data = data, Hess = TRUE )
+
+# Summary of the model
+summary(ordinal_logit_model)
+
+```
+
+### EXPLANATION
+
+The following are some of the insights for the output :
+  1. The coefficient for SepalWidthCm is -1.985 which implies that for a one-unit increase in SepalWidthCm, the log-odds of being in a higher category that is moving from Iris-virginica to Iris-setosa or from Iris-setosa to Iris-versicolor decreases by 1.985.
+  
+  2. Similarly, the coefficient for PetalWidthCm is -1.458, indicating that a one-unit increase in PetalWidthCm decreases the log-odds of being in a higher category by 1.458.
+  
+  3. The standard error for both predictor variables  indicates the variability of the coefficient estimate, and the t-value of suggests whether the predictor variable is a statistically significant predictor. For example The standard error of 0.4315 indicates the variability of this estimate, and the t-value of -4.600 suggests that SepalWidthCm is a statistically significant predictor.
+  
+  4. The intercept values in an ordinal logistic regression model represent the thresholds at which the probability shifts from one category to the next. For example, an intercept of -8.5426 indicates the log-odds at the boundary between the "Iris-virginica" and "Iris-setosa" categories. A negative intercept suggests that when predictor variables are at their reference levels, the log-odds of being in a higher category (e.g moving from "Iris-virginica" to "Iris-setosa") are lower.
+  
+  5. The residual deviance and AIC are measures of the model fit. Lower values indicate a better fit. In this case, these values suggest how well the model explains the data, with the AIC providing a balance between model fit and complexity.
+
+## QUESTION 3
+### Using data . Define Poisson regression and list its key assumptions. Explain why these assumptions are important for modeling count data effectively.(10marks)
+
+### POISSON REGRESSION 
+
+Poisson Regression model is used to model count data and model response variables (Y-values) that are counts.
+
+Using the bicycle data set we are able to use to analyze on bike utilization in New York therefore, the "Total" column would generally be the outcome variable of interest crossing all bridges combined.
+
+The following are assumption made when using the poisson regression model:
+  1. The response Y has a poisson distribution.
+  
+  2. The dependent variable,Y consists of count data that must be positive,count variables require integer data that must be zero or greater.
+  
+  3. There is one or more independent variables, which can be measured on a continuous, ordinal or nominal/dichotomous scale.
+  
+  4. There is independence of observations that is, each observation is independent of the other observations.
+  
+  5. The mean and variance of the model are identical.
+  
+The following are reasons as to why the assumptions in poisson is important for modeling count data:
+  1. It ensures the model is appropriate for the type of data.
+  
+  2. It ensures that the response variable follows a Poisson distribution and that the mean equals the variance is crucial for correctly applying Poisson regression.
+  
+  3. It prevent incorrect standard errors and significance tests by ensuring that independence of observations is vital for valid statistical inference.
+  
+
+```{r}
+# Load the necessary libraries
+library(readxl)
+library(MASS)
+
+# Load the data 
+data <- read.csv("C:\\Users\\HP\\Desktop\\R- CODES\\nyc-east-river-bicycle-counts.csv")
+
+# summary and structure of the data
+str(data)
+summary(data)
+
+# Remove missing values
+data <- na.omit(data)
+
+# Display a portion of the data 
+head(data)
+
+# Convert Total back to numeric
+data$Total <- as.numeric(as.character(data$Total))
+```
+
+```{r}
+# Fit the Poisson model 
+pois_model <- glm(Total ~ Brooklyn.Bridge + Manhattan.Bridge, family="poisson", data=data)
+
+# Summary model
+summary(pois_model)
+```
+
+### EXPLANATION
+
+The following insights are derived from the output:
+     1. The intercept represents the baseline log count of bicycles when counts for both Brooklyn Bridge and Manhattan Bridge are zero. The estimate is 8.535.
+     
+    2. For each additional bicycle counted on the Brooklyn Bridge, the log count of total bicycles increases by 0.0002873. This coefficient is highly significant with a p-value much smaller than 0.05 (< 2e-16).
+    
+    3. For each additional bicycle counted on the Manhattan Bridge, the log count of total bicycles increases by 0.00007811. This coefficient is also highly significant with a p-value much smaller than 0.05 (< 2e-16).
+    
+   4.	The residual deviance is lower than the null deviance, indicating that the model fits the data better than a model with no predictors
+ 
+
+
+

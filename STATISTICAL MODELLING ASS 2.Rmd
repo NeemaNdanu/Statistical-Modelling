@@ -1,0 +1,394 @@
+---
+title: "STATISTICAL MODELLING  ASS 2"
+author: "NEEMA NDANU"
+date: "2024-07-18"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## QUESTION 1 [show your R codes, R output, description of the process and Interpretation both in HTML and Word document]	(10 Marks)
+### (a)	Using appropriate statistical data  data,  compare a log model, poison model , negative binomial and Quasi-Poisson Do they   differ significantly explanatory variables therein considering potential over-dispersion and the categorical nature of of the response variable?(10 marks)
+
+```{r}
+# Load the necessary libraries
+library(readxl)
+library(ggplot2)
+library(MASS)       # For Negative Binomial model
+library(pscl)       # For various model diagnostics
+library(dplyr)      # For data manipulation
+library(sandwich)   # For robust standard errors
+library(lmtest)     # For coeftest function
+library(car)        # For VIF function
+
+# Load the data
+data <- read.csv("C:\\Users\\HP\\Desktop\\R- CODES\\WineQT.csv")
+
+# Inspect the data structure and summary
+str(data)
+summary(data)
+
+# Ensure quality is treated as a factor
+data$quality <- as.factor(data$quality)
+
+# Check for missing values
+missing_values <- sapply(data, function(x) sum(is.na(x)))
+print(missing_values)
+
+# Impute missing values
+# Impute numeric columns with the mean
+data <- data %>% 
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+
+# Impute categorical columns with the mode (most frequent value)
+impute_mode <- function(x) {
+  if(is.factor(x) || is.character(x)) {
+    # Get the most frequent value
+    return(ifelse(is.na(x), as.character(names(sort(table(x), decreasing = TRUE))[1]), x))
+  }
+  return(x)
+}
+
+data <- data %>% 
+  mutate(across(where(~ is.factor(.) || is.character(.)), ~ impute_mode(.)))
+
+# Remove rows with any remaining missing values (if necessary)
+data_clean <- na.omit(data)
+
+# Check if there are still any missing values
+missing_values_clean <- sapply(data_clean, function(x) sum(is.na(x)))
+print(missing_values_clean)
+
+```
+
+### EXPLANATION
+The code reads the dataset, checks and imputes missing values, and ensures that the data is clean and ready for analysis
+Most of the variables exhibit a right-skewed distribution that is because  their mean being either slightly higher or significantly higher than the median.
+Variables such as pH, quality, and density have distributions that are closer to normal. For these variables, the mean is either slightly lower than or around the median, indicating a more symmetric distribution.
+
+
+```{r}
+# Load necessary libraries
+library(corrplot)  # For correlation plots
+
+# Convert quality to numeric if not already done
+data_clean$quality_numeric <- as.numeric(data_clean$quality)
+
+# Select numeric columns excluding quality_numeric
+numeric_columns <- sapply(data_clean, is.numeric)
+numeric_columns["quality_numeric"] <- FALSE
+
+numeric_data <- data_clean[, numeric_columns]
+
+# Compute correlation matrix
+cor_matrix <- cor(numeric_data)
+cor_matrix
+
+# Add the quality column to the matrix
+# First, get correlations between each numeric variable and the quality
+cor_with_quality <- sapply(numeric_data, function(x) cor(x, data_clean$quality_numeric))
+
+# Add correlations with quality to the matrix
+cor_matrix <- cbind(cor_matrix, quality = cor_with_quality)
+cor_matrix <- rbind(cor_matrix, quality = c(cor_with_quality, 1))
+
+
+```
+
+### EXPLANATION
+
+The above code helps us to understand how the variables are correlated to each other and form the code we got the following info :
+There is inter variable relationship such as 
+  1. fixed.acidity and citric.acid have a high positive correlation (0.67315725), indicating they tend to increase or decrease together.
+  2 .total.sulfur.dioxide and free.sulfur.dioxide have a high positive correlation (0.66109287), showing a strong linear relationship between them.
+
+Some of the overall trends:
+  1. Variables like citric.acid, residual.sugar, and sulphates show positive correlations with quality, which might imply that higher values of these variables are associated with higher quality.
+  2. Variables like volatile.acidity and chlorides show negative correlations with quality, suggesting that higher values of these variables are associated with lower quality.
+
+
+```{r}
+# Fit the varaious modles
+# Log-linear model (using GLM with log link)
+log_linear_model <- glm(quality_numeric ~ alcohol + citric.acid + sulphates, family = poisson(link = "log"), data = data_clean)
+summary(log_linear_model)
+
+# Fit a Poisson regression model
+pois_model <- glm(quality_numeric ~ alcohol + citric.acid + sulphates, 
+                     family = poisson(), data = data_clean)
+summary(pois_model)
+
+# Fit a Negative Binomial model
+negbin_model <- glm.nb(quality_numeric ~ alcohol + citric.acid + sulphates, data = data_clean)
+summary(negbin_model)
+```
+
+### EXPLANATAION
+The above code does the following :
+- For log -linear model
+ 1. Formula: The model predicts quality_numeric (the response variable) as a function of alcohol, citric.acid, and sulphates (the predictor variables).
+ 2.Family: The model uses the Poisson distribution with a log link function, which is suitable for count data or rates.
+ 
+- For poisson model
+ 1. For the above code we  code 'family = poisson()' specifies that the response variable follows a Poisson distribution, which is appropriate for count data or rates. The Poisson model assumes that the log of the expected value of the response variable is a linear combination of the predictors.
+ 2. Poisson regression assumes the dispersion parameter is 1, which means the variance equals the mean.
+
+- For neagtive binomial 
+ 1. The code 'glm.nb()' is  a function fits a Generalized Linear Model with a Negative Binomial distribution. The Negative Binomial model is used for count data that may exhibit overdispersion (where the variance exceeds the mean), which the Poisson model cannot handle.
+ 2. The theta parameter represents the dispersion of the Negative Binomial model. A large theta value often suggests that the data is overdispersed compared to a Poisson model. The standard error is large, which might be related to the convergence warnings.
+
+In all the models we have generated above we get the following insights from the code : 
+ 1. The intercept represents the value of quality_numeric when all predictors are zero. Since its p-value is greater than 0.05, it is not statistically significant.
+ 2. For a one-unit increase in alcohol, the value of quality_numeric increases by 0.08856. The effect is highly significant, as indicated by the very small p-value.
+ 3. For a one-unit increase in citric.acid, the  value of quality_numeric increases by 0.14947. This effect is not significant, as the p-value is above to the typical 0.05 threshold.
+ 4. For a one-unit increase in sulphates, the value of quality_numeric increases by 0.21369. This effect is statistically significant at the 0.05 level.
+ 5. The null deviance measures how well the null model (intercept only) fits the data. It serves as a baseline for comparing the fit of the current model.
+ 6. The number of fisher scoring iterations: is the number of iterations the algorithm took to converge to the final parameter estimates. Here all the number of iterations are the same except that of negative binomial which is 1. 
+ 7. AIC provides a measure of model quality, balancing fit and complexity. Lower AIC values indicate a better model, but it should be compared across models to be meaningful.
+ 
+
+```{r}
+# Fit a Quasi-Poisson model
+quasipoisson_model <- glm(quality_numeric ~ alcohol + citric.acid + sulphates, 
+                          family = quasipoisson(), data = data_clean)
+summary(quasipoisson_model)
+```
+### EPLANATION
+
+The Quasi-Poisson model was used to fit the data, addressing overdispersion where the variance exceeds the mean, which is common in count data. This model employs the quasipoisson() family, adjusting the Poisson distribution to account for this overdispersion. 
+
+The estimated dispersion parameter for this model was 0.1235472, indicating a certain degree of overdispersion. 
+
+Unlike other models, the Quasi-Poisson model does not provide an Akaike Information Criterion (AIC) value because AIC is not typically defined for quasi-likelihood models.
+
+The analysis revealed that all three predictors—alcohol, citric.acid, and sulphates—are statistically significant, with positive coefficients suggesting that increases in these predictors are associated with higher values of the response variable, quality_numeric. 
+
+Notably, the intercept remains consistent across all models, including the Quasi-Poisson model. This model differs from others by showing that all explanatory variables are significant, unlike the results obtained from the alternative models.
+
+```{r}
+# Compare models using AIC
+aic_values <- c(
+  log_linear = AIC(log_linear_model),
+  poisson = AIC(pois_model),
+  negbin = AIC(negbin_model),
+  quasipoisson = AIC(quasipoisson_model)
+)
+print(aic_values)
+```
+### EXPLANATION
+The log-linear and Poisson models have the same AIC value of 3762.192, suggesting they fit the data equally well in terms of AIC.
+
+The Negative Binomial model has a slightly higher AIC value of 3764.199, indicating a slightly worse fit compared to the log-linear and Poisson models.
+
+The Quasi-Poisson model cannot be compared using AIC because AIC is not defined for quasi-likelihood models.
+
+```{r}
+# Create a list of models
+fm <- list(log_linear_model, pois_model, negbin_model, quasipoisson_model)
+
+# Compare standard errors of coefficients
+se_comparison <- sapply(fm, function(x) sqrt(diag(vcov(x))))
+print(se_comparison)
+```
+
+### EXPLANATION
+The standard errors for the coefficients (Intercept, alcohol, citric.acid, and sulphates) are similar across the models, indicating comparable variability in coefficient estimates. 
+
+However, the Quasi-Poisson model has noticeably smaller standard errors than the other models, suggesting it estimates coefficients with less variability. This means that the Quasi-Poisson model may provide the most precise estimates of the coefficients.
+
+```{r}
+# Compare log-likelihood and degrees of freedom
+logLik_comparison <- rbind(
+  LogLik = sapply(fm, function(x) if (inherits(x, "glm")) logLik(x) else NA),
+  Df = sapply(fm, function(x) if (inherits(x, "glm")) attr(logLik(x), "df") else NA)
+)
+
+print(logLik_comparison)
+```
+
+# EXPLANATION
+The provided code snippet compares log-likelihood values and degrees of freedom across different regression models to assess fit and complexity. Log-likelihood values reflect model fit, while degrees of freedom represent the number of parameters. 
+
+The Negative Binomial model shows a slightly different fit compared to the Log-linear and Poisson models, with both the Negative Binomial and Quasi-Poisson models incorporating an additional parameter compared to the Log-linear and Poisson models.
+
+## QUESTION 2 [show your R codes, R output, description of the process and Interpretation] (10 Marks)
+### (a)	Using appropriate statistical  data, perform non-parametric regression  analysis using any technique. Interpret the output
+
+```{r}
+# Load the necessary libraries
+library(readxl)
+library(ggplot2)
+library(caret)
+library(kknn)
+
+# Load the data
+data <- read.csv("C:\\Users\\HP\\Desktop\\R- CODES\\housing.csv")
+
+# Inspect the data structure and summary
+str(data)
+summary(data)
+
+# Check for missing values
+sum(is.na(data$total_bedrooms))
+
+# Omit the data 
+data <- na.omit(data)
+
+# Impute missing values with median
+data$total_bedrooms[is.na(data$total_bedrooms)] <- median(data$total_bedrooms, na.rm = TRUE)
+
+```
+ 
+### EXPLANATION
+The  207 indictates missing values in the total_bedrooms variable (before handling missing values). Missing values are checked and handled by either removing rows with missing values or imputing them with the median.
+
+```{r}
+# Perform LOESS non-parametric regression
+loess_fit <- loess(median_house_value ~ median_income, data = data, span = 0.5)
+
+# Predict using the LOESS model
+data$predicted_house_value_loess <- predict(loess_fit, data)
+
+# Plot the results
+ggplot(data, aes(x = median_income, y = median_house_value)) +
+  geom_point(alpha = 0.3) +
+  geom_line(aes(y = predicted_house_value_loess), color = 'blue', size = 1) +
+  labs(title = "LOESS Regression: Median House Value vs Median Income",
+       x = "Median Income",
+       y = "Median House Value") +
+  theme_minimal()
+
+```
+
+### EXPLANATION
+In the graph, each data point represents a specific location, likely a region or neighborhood. The concentration of points in the lower left corner indicates that areas with lower median incomes generally have lower median house values.
+
+As we move towards the upper right, the data points become more spread out, showing that higher median incomes are associated with higher median house values. 
+
+The smooth LOESS (Locally Estimated Scatterplot Smoothing) curve overlaid on the scatter plot illustrates the underlying trend. It starts from the lower left (low median income, low house value) and curves upward to the upper right (high median income, high house value). 
+
+The positive slope of the LOESS curve suggests that median house values tend to increase with median income, although there is noticeable variability around this trend.
+
+# QUESTION 3 [show your R codes, R output, description of the process and Interpretation]	(20 Marks)
+### (a)	Using appropriate statistical  data, perform any two appropriate analysis that can be used in observations that clustered within groups. Interpret the output 
+
+```{r}
+# Load the necessary libraries
+library(readxl)
+library(lme4)        # For mixed-effects models
+library(geepack)     # For GEE models
+library(car)         # For ANOVA and other statistical functions
+library(dplyr)       # For data manipulation
+library(cluster)     # For hierarchical clustering
+library(factoextra)  # For clustering visualization
+
+# Load the data
+data <- read.csv("C:\\Users\\HP\\Desktop\\R- CODES\\diabetes.csv")
+
+# Inspect the data structure and summary
+str(data)
+summary(data)
+
+# Check for missing values
+sum(is.na(data))
+
+# Handle missing values by replacing NaN and Inf with NA
+data <- data %>% mutate(across(everything(), ~ replace(.x, is.nan(.x) | is.infinite(.x), NA)))
+
+# Remove rows with any NA values
+data <- na.omit(data)
+
+# Simulate clustering
+set.seed(123)
+data$cluster <- as.factor(sample(1:10, size = nrow(data), replace = TRUE))
+
+# Inspect the simulated clustering
+table(data$cluster)
+
+```
+
+### EXPLANATION
+The code handles missing values by replacing NaN and Inf with NA and removing rows with NA values, and simulate clustering by adding a cluster ID variable to each observation.It then displays the number of observations in each cluster.
+
+
+```{r}
+# Fit a GEE model
+gee_model <- geeglm( Outcome ~ Glucose  +  BloodPressure, id = cluster, family = gaussian, data = data)
+
+# Summarize the model
+summary(gee_model)
+
+```
+
+### EXPLANATION
+The model has an intercept value of -0.4835390, representing the expected outcome when all predictors are zero. 
+
+The intercept is highly significant with a Wald test p-value of 2.09e-10. The Glucose coefficient is also highly significant, with a Wald test p-value < 2e-16. In contrast, the BloodPressure coefficient is not significant, with a p-value of 0.848. 
+
+The code snippet correlation structure = independence specifies that an independence correlation structure was used for clustering. 
+
+The model includes 693 clusters, with the largest cluster containing 4 observations. The estimated scale parameter is 0.1777, indicating unexplained variability in the outcome. 
+
+The GEE model, which accounts for clustering, finds Glucose to be a significant predictor, while BloodPressure is not, and the residual variability is captured by the scale parameter.
+
+```{r}
+# Fit a simplified linear mixed-effects model
+model <- lmer(Outcome ~ Glucose  +  BloodPressure + (1 | cluster), data = data,control = lmerControl(optimizer = "bobyqa"))
+
+summary(model)
+
+
+```
+### EXPLANATION
+The following are the insights form the above code: 
+ 1. Degrees of Freedom Calculation: With 768 observations and 3 fixed effects (including the intercept), the degrees of freedom are 768 − 3 = 765
+ 2. Critical t-value: For a two-tailed test with 𝛼= 0.05 and 765 degrees of freedom, the critical t-value is approximately 1.96.
+
+We can interpret the t-Values as follows:
+ 1. Intercept: -6.44, indicating statistical significance.
+ 2. Glucose Coefficient: 14.57, indicating high significance.
+ 3. Blood Pressure Coefficient: -0.15, indicating it is not significant.
+
+For the Correlations we can interpret it as follows:
+ 1. Between the intercept and Glucose coefficient: -0.652.
+ 2. Between Glucose and Blood Pressure coefficients: -0.153.
+ 
+Lastly for the model description we have the following insights:
+ 1. The model fits a linear mixed-effects model with Glucose and Blood Pressure as fixed effects and a random intercept for each cluster. 
+ 2. It uses 768 clusters, with the largest cluster containing 10 observations. The summary output includes the REML criterion, scaled residuals, variances of random effects, and fixed effects estimates with their standard errors and t-values.
+ 3. Glucose is a significant predictor of the outcome, while Blood Pressure is not. The scale parameter indicates the residual variability not explained by the model.
+
+```{r}
+# Perform ANOVA test to compare fixed effects
+anova_result <- Anova(model, type = 3)
+print(anova_result)
+
+```
+
+### EXPLANATION
+The p-value associated with the chi-square statistic reflects the probability of observing a chi-square statistic as extreme as, or more extreme than, the one obtained if the null hypothesis is true.
+
+For the intercept, the p-value is highly significant (p < 0.001), indicating a strong contribution to the model, as the Wald chi-square test statistic is very large. 
+
+Similarly, the Glucose variable is highly significant (p < 0.001), with a very large chi-square statistic and extremely small p-value, highlighting its importance as a predictor of the outcome. 
+
+In contrast, the Blood Pressure variable is not significant (p = 0.88), with a very small chi-square statistic and a p-value much larger than 0.05, suggesting it does not significantly contribute to the model.
+
+
+```{r}
+# Inspect random effects
+random_effects <- ranef(model)
+print(random_effects)
+
+```
+
+### EXPLANATION
+The random effects represent deviations from the overall intercept for each cluster. 
+
+For instance, in the model, the first cluster has an intercept that is -0.028230 units below the overall intercept, while the fourth cluster's intercept is 0.048136 units above the overall intercept. 
+
+With 10 clusters, each has its own random effect for the intercept, reflecting how much the intercept for each cluster deviates from the overall model intercept.
